@@ -43,9 +43,10 @@ const loaderAddonLabels: Record<LoaderAddon, string> = {
   qfapi: 'QFAPI',
 }
 
-const mockSourceSpeeds: Record<Exclude<DownloadSource, 'auto'>, number> = {
-  official: 4.2,
-  bmclapi: 8.3,
+// 测速端点配置
+const sourceEndpoints: Record<Exclude<DownloadSource, 'auto'>, string> = {
+  official: 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json',
+  bmclapi: 'https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json',
 }
 
 function formatDate(date: string) {
@@ -79,6 +80,14 @@ function App() {
 
   const [autoSource, setAutoSource] = useState(true)
   const [source, setSource] = useState<DownloadSource>('bmclapi')
+
+  // 测速相关状态
+  const [sourceSpeeds, setSourceSpeeds] = useState<Record<Exclude<DownloadSource, 'auto'>, number | null>>({
+    official: null,
+    bmclapi: null,
+  })
+  const [isTesting, setIsTesting] = useState(false)
+  const [testingSource, setTestingSource] = useState<Exclude<DownloadSource, 'auto'> | null>(null)
 
   const [threadAuto, setThreadAuto] = useState(true)
   const [threads, setThreads] = useState(8)
@@ -119,9 +128,19 @@ function App() {
 
   const fastestSource = useMemo(() => {
     if (!autoSource) return source
-    const fastest = Object.entries(mockSourceSpeeds).sort((a, b) => b[1] - a[1])[0]?.[0]
-    return (fastest as DownloadSource) ?? 'bmclapi'
-  }, [autoSource, source])
+    
+    // 根据真实测速结果选择最快的源
+    const validSpeeds = Object.entries(sourceSpeeds)
+      .filter(([, speed]) => speed !== null)
+      .sort((a, b) => (b[1] as number) - (a[1] as number))
+    
+    if (validSpeeds.length > 0) {
+      return validSpeeds[0][0] as DownloadSource
+    }
+    
+    // 如果还没有测速结果，默认使用 bmclapi
+    return 'bmclapi'
+  }, [autoSource, source, sourceSpeeds])
 
   function addDownload(name: string, contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds', size: string) {
     const newDownload: Download = {
@@ -206,6 +225,66 @@ function App() {
     const clamped = Math.min(64, Math.max(1, next || 1))
     setThreads(clamped)
   }
+
+  // 测试单个源的速度
+  async function testSourceSpeed(sourceKey: Exclude<DownloadSource, 'auto'>) {
+    setTestingSource(sourceKey)
+    const endpoint = sourceEndpoints[sourceKey]
+    
+    try {
+      const startTime = performance.now()
+      const response = await fetch(endpoint, { 
+        method: 'HEAD',
+        cache: 'no-cache'
+      })
+      
+      if (!response.ok) {
+        console.warn(`${sourceKey} 请求失败: ${response.status}`)
+        setSourceSpeeds(prev => ({ ...prev, [sourceKey]: 0 }))
+        return
+      }
+      
+      const endTime = performance.now()
+      const latency = endTime - startTime // 延迟（毫秒）
+      
+      // 根据延迟计算一个评分（0-10 MB/s）
+      // 延迟越低，速度评分越高
+      let speedScore: number
+      if (latency < 100) {
+        speedScore = 10 - (latency / 100) * 3 // 7-10 MB/s
+      } else if (latency < 300) {
+        speedScore = 7 - ((latency - 100) / 200) * 3 // 4-7 MB/s
+      } else if (latency < 1000) {
+        speedScore = 4 - ((latency - 300) / 700) * 3 // 1-4 MB/s
+      } else {
+        speedScore = Math.max(0.1, 1 - ((latency - 1000) / 2000)) // 0.1-1 MB/s
+      }
+      
+      setSourceSpeeds(prev => ({ ...prev, [sourceKey]: parseFloat(speedScore.toFixed(2)) }))
+    } catch (error) {
+      console.error(`测速 ${sourceKey} 失败:`, error)
+      setSourceSpeeds(prev => ({ ...prev, [sourceKey]: 0 }))
+    } finally {
+      setTestingSource(null)
+    }
+  }
+
+  // 测试所有源的速度
+  async function testAllSources() {
+    setIsTesting(true)
+    
+    // 串行测试每个源
+    for (const sourceKey of Object.keys(sourceEndpoints) as Array<Exclude<DownloadSource, 'auto'>>) {
+      await testSourceSpeed(sourceKey)
+    }
+    
+    setIsTesting(false)
+  }
+
+  // 组件加载时自动测速
+  useState(() => {
+    testAllSources()
+  })
 
   // 获取加载器推荐配置
   function getLoaderRecommendation(loader: LoaderPrimary): string {
@@ -559,8 +638,52 @@ function App() {
                     </label>
                   ))}
                 </div>
-                <div className="mt-4 rounded-xl border border-brand-500/20 bg-brand-500/5 px-4 py-3 text-sm text-white/80">
-                  <span className="font-medium text-brand-300">当前：</span> {autoSource ? '自动' : '手动'} · {fastestSource} ({mockSourceSpeeds[fastestSource as Exclude<DownloadSource, 'auto'>] ?? '-'} MB/s)
+                <div className="mt-4 rounded-xl border border-brand-500/20 bg-brand-500/5 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-white/80">
+                      <span className="font-medium text-brand-300">当前源：</span> 
+                      <span className="text-white ml-2">
+                        {autoSource ? '自动选择' : downloadSources.find(s => s.key === source)?.label}
+                      </span>
+                      {autoSource && (
+                        <span className="text-white/60 ml-2">
+                          → {downloadSources.find(s => s.key === fastestSource)?.label}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={testAllSources}
+                      disabled={isTesting}
+                      className="rounded-lg bg-brand-500/20 hover:bg-brand-500/30 px-3 py-1.5 text-xs font-semibold text-brand-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                    >
+                      {isTesting ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          测速中
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          重新测速
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 text-xs">
+                    {Object.entries(sourceSpeeds).map(([key, speed]) => (
+                      <div key={key} className="flex items-center justify-between text-white/60">
+                        <span>{downloadSources.find(s => s.key === key)?.label}:</span>
+                        <span className={testingSource === key ? 'text-brand-400 animate-pulse font-medium' : speed !== null && speed > 5 ? 'text-green-400' : ''}>
+                          {testingSource === key ? '测试中...' : speed !== null ? `${speed.toFixed(2)} MB/s` : '未测试'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
