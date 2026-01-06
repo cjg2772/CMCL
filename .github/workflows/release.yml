@@ -1,0 +1,92 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Read version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$version" -Encoding utf8
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build renderer and main
+        run: npm run build
+
+      - name: Package Windows installer and portable
+        run: |
+          $version = $env:APP_VERSION
+          npx electron-builder --win nsis portable --publish never
+
+          # Rename artifacts
+          Get-ChildItem "release/*portable*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+            Move-Item $_.FullName "release/CMCL_${version}.exe" -Force
+          }
+          Get-ChildItem "release/CMCL-Setup-*.exe" -ErrorAction SilentlyContinue | ForEach-Object {
+            Move-Item $_.FullName "release/CMCL_${version}_Release.exe" -Force
+          }
+
+          # Prepare green (portable folder) - compress with folder inside zip
+          $greenRoot = "release/green"
+          $greenFolder = Join-Path $greenRoot "CMCL_${version}_Green"
+          Remove-Item $greenRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $greenFolder | Out-Null
+          Copy-Item "release/win-unpacked/*" $greenFolder -Recurse
+
+          Compress-Archive -Path $greenFolder -DestinationPath "release/CMCL_${version}_Green.zip" -Force
+        shell: pwsh
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmcl-installer
+          path: |
+            release/CMCL_${{ env.APP_VERSION }}_Release.exe
+
+      - name: Upload portable exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmcl-portable-exe
+          path: |
+            release/CMCL_${{ env.APP_VERSION }}.exe
+          if-no-files-found: ignore
+
+      - name: Upload portable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmcl-green-zip
+          path: |
+            release/CMCL_${{ env.APP_VERSION }}_Green.zip
+          if-no-files-found: ignore
+
+
