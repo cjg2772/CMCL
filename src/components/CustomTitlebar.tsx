@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 interface ElectronAPI {
   onWindowStateChanged?: (callback: (isMaximized: boolean) => void) => void
@@ -8,29 +8,15 @@ interface ElectronAPI {
 }
 
 export function CustomTitlebar() {
-  const [isMaximized, setIsMaximized] = useState(false)
-
   useEffect(() => {
-    // 获取 Electron 窗口 API
+    // 获取 Electron 窗口 API（预留用于未来扩展）
     const electronAPI = (window as unknown as { electronAPI?: ElectronAPI }).electronAPI
     if (!electronAPI) return
-
-    // 监听窗口状态变化
-    if (electronAPI.onWindowStateChanged) {
-      electronAPI.onWindowStateChanged((isMaximized: boolean) => {
-        setIsMaximized(isMaximized)
-      })
-    }
   }, [])
 
   const handleMinimize = () => {
     const electronAPI = (window as unknown as { electronAPI?: ElectronAPI }).electronAPI
     electronAPI?.minimize?.()
-  }
-
-  const handleMaximize = () => {
-    const electronAPI = (window as unknown as { electronAPI?: ElectronAPI }).electronAPI
-    electronAPI?.maximize?.()
   }
 
   const handleClose = () => {
