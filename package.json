@@ -1,6 +1,8 @@
 {
   "name": "cmcl",
   "version": "1.0.0",
+  "description": "CIME Minecraft Launcher - 现代化游戏启动器",
+  "author": "CIME Team",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -70,8 +72,7 @@
           "target": "portable",
           "arch": ["x64"]
         }
-      ],
-      "icon": "public/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
