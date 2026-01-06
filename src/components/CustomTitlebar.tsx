@@ -54,7 +54,7 @@ export function CustomTitlebar() {
       >
         <button
           onClick={handleMinimize}
-          className="w-8 h-8 hover:bg-white/10 rounded transition-colors flex items-center justify-center text-white/70 hover:text-white"
+          className="w-10 h-10 hover:bg-white/10 transition-colors flex items-center justify-center text-white/70 hover:text-white"
           title="最小化"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -63,22 +63,8 @@ export function CustomTitlebar() {
         </button>
 
         <button
-          onClick={handleMaximize}
-          className="w-8 h-8 hover:bg-white/10 rounded transition-colors flex items-center justify-center text-white/70 hover:text-white"
-          title={isMaximized ? '还原' : '最大化'}
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            {isMaximized ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0V3a2 2 0 00-2-2h-2a2 2 0 00-2 2v2m0 0H9m11 0h2" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4m-4 0l5 5m11-5v4m0 0h-4m4 0l-5 5M4 20v-4m0 4h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-            )}
-          </svg>
-        </button>
-
-        <button
           onClick={handleClose}
-          className="w-8 h-8 hover:bg-red-500/20 rounded transition-colors flex items-center justify-center text-white/70 hover:text-red-400"
+          className="w-10 h-10 hover:bg-red-500 transition-colors flex items-center justify-center text-white/70 hover:text-white"
           title="关闭"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

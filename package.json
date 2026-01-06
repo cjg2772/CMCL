@@ -50,6 +50,7 @@
   },
   "build": {
     "appId": "com.cime.cmcl.launcher",
+    "productName": "CMCL",
     "directories": {
       "output": "release"
     },
@@ -61,10 +62,24 @@
     "asar": true,
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
       ],
-      "artifactName": "CMCL-Setup-${version}.exe"
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "CMCL_${version}_Setup.exe"
+    },
+    "portable": {
+      "artifactName": "CMCL_${version}_Portable.exe"
     }
   }
 }
