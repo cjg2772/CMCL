@@ -6,8 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const isDev = !app.isPackaged
 
+let mainWindow: BrowserWindow | null = null
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1400,
@@ -28,24 +30,49 @@ function createWindow() {
   })
   
   // 隐藏菜单栏
-  win.setMenu(null)
+  mainWindow.setMenu(null)
 
   const rendererUrl = isDev
     ? 'http://localhost:5173'
     : path.join(__dirname, '../dist/index.html')
 
   if (isDev) {
-    win.loadURL(rendererUrl)
-    win.webContents.openDevTools({ mode: 'detach' })
+    mainWindow.loadURL(rendererUrl)
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    win.loadFile(rendererUrl)
+    mainWindow.loadFile(rendererUrl)
   }
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+
+  // 窗口状态变化监听
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:state-changed', true)
+  })
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:state-changed', false)
+  })
 }
+
+// 窗口控制 IPC handlers
+ipcMain.handle('window:minimize', () => {
+  mainWindow?.minimize()
+})
+
+ipcMain.handle('window:maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow.unmaximize()
+  } else {
+    mainWindow?.maximize()
+  }
+})
+
+ipcMain.handle('window:close', () => {
+  mainWindow?.close()
+})
 
 app.whenReady().then(() => {
   createWindow()

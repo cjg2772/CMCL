@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 import { clsx } from 'clsx'
 import { contentCatalog, defaultBackgrounds } from './data'
+import { CustomTitlebar } from './components/CustomTitlebar'
+import { SidebarNav, type MenuTab } from './components/SidebarNav'
+import { ContentTypeSourceMenu } from './components/ContentTypeSourceMenu'
+import { DownloadManager, type Download } from './components/DownloadManager'
 import {
   type DownloadSource,
   type LoaderAddon,
@@ -9,8 +13,6 @@ import {
   type GameInstance,
   type VersionHistory,
 } from './types'
-
-type Tab = 'settings' | 'content' | 'instances' | 'history'
 
 const downloadSources: Array<{ key: DownloadSource; label: string; speedHint: string }> = [
   { key: 'auto', label: '自动选择最快', speedHint: '根据实时测速自动切换' },
@@ -51,12 +53,29 @@ function formatDate(date: string) {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('settings')
+  const [activeTab, setActiveTab] = useState<MenuTab>('settings')
   const [backgroundUrl, setBackgroundUrl] = useState(defaultBackgrounds[0])
   const [blurBackground, setBlurBackground] = useState(true)
   const [themeColor, setThemeColor] = useState('#3b82f6')
   const [isDarkMode, setIsDarkMode] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // 源切换状态（每个内容类型独立）
+  const [modsSource, setModsSource] = useState<DownloadSource>('bmclapi')
+  const [resourcePacksSource, setResourcePacksSource] = useState<DownloadSource>('bmclapi')
+  const [shadersSource, setShadersSource] = useState<DownloadSource>('bmclapi')
+  const [worldsSource, setWorldsSource] = useState<DownloadSource>('bmclapi')
+
+  // 源菜单展开状态
+  const [expandedSourceMenus, setExpandedSourceMenus] = useState<Record<string, boolean>>({
+    mods: false,
+    resourcePacks: false,
+    shaders: false,
+    worlds: false,
+  })
+
+  // 下载管理
+  const [downloads, setDownloads] = useState<Download[]>([])
 
   const [autoSource, setAutoSource] = useState(true)
   const [source, setSource] = useState<DownloadSource>('bmclapi')
@@ -71,7 +90,7 @@ function App() {
   const [loaderAddons, setLoaderAddons] = useState<LoaderAddon[]>(['fabric-api'])
   const [loaderNote, setLoaderNote] = useState('推荐 Fabric + Fabric API 以获得更佳兼容性')
 
-  // 新增：游戏实例管理
+  // 游戏实例管理
   const [gameInstances] = useState<GameInstance[]>([
     {
       id: '1',
@@ -88,10 +107,10 @@ function App() {
   ])
   const [selectedInstance, setSelectedInstance] = useState<string>('1')
 
-  // 新增：版本历史
+  // 版本历史
   const [versionHistory] = useState<VersionHistory[]>([])
 
-  // 新增：配置预设
+  // 配置预设
   const presets = [
     { name: '极速配置', config: { source: 'bmclapi' as DownloadSource, threads: 32, loader: 'fabric' as LoaderPrimary } },
     { name: '稳定配置', config: { source: 'official' as DownloadSource, threads: 8, loader: 'forge' as LoaderPrimary } },
@@ -103,6 +122,80 @@ function App() {
     const fastest = Object.entries(mockSourceSpeeds).sort((a, b) => b[1] - a[1])[0]?.[0]
     return (fastest as DownloadSource) ?? 'bmclapi'
   }, [autoSource, source])
+
+  function addDownload(name: string, contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds', size: string) {
+    const newDownload: Download = {
+      id: `download-${Date.now()}`,
+      name,
+      contentType,
+      progress: 0,
+      status: 'pending',
+      size,
+      speed: '0 MB/s',
+    }
+    setDownloads([...downloads, newDownload])
+
+    // 模拟下载过程
+    setTimeout(() => {
+      setDownloads((prev) =>
+        prev.map((d) =>
+          d.id === newDownload.id ? { ...d, status: 'downloading' } : d
+        )
+      )
+
+      let progress = 0
+      const interval = setInterval(() => {
+        progress += Math.random() * 30
+        if (progress >= 100) {
+          progress = 100
+          clearInterval(interval)
+          setDownloads((prev) =>
+            prev.map((d) =>
+              d.id === newDownload.id
+                ? { ...d, progress: 100, status: 'completed', speed: '完成' }
+                : d
+            )
+          )
+        } else {
+          setDownloads((prev) =>
+            prev.map((d) =>
+              d.id === newDownload.id
+                ? { ...d, progress, speed: `${(Math.random() * 10 + 2).toFixed(2)} MB/s` }
+                : d
+            )
+          )
+        }
+      }, 500)
+    }, 300)
+  }
+
+  function removeDownload(id: string) {
+    setDownloads((prev) => prev.filter((d) => d.id !== id))
+  }
+
+  function retryDownload(id: string) {
+    setDownloads((prev) =>
+      prev.map((d) =>
+        d.id === id ? { ...d, status: 'pending', progress: 0, error: undefined } : d
+      )
+    )
+    addDownload(
+      downloads.find((d) => d.id === id)?.name || '',
+      downloads.find((d) => d.id === id)?.contentType || 'mods',
+      downloads.find((d) => d.id === id)?.size || ''
+    )
+  }
+
+  function clearDownloads() {
+    setDownloads((prev) => prev.filter((d) => d.status !== 'completed' && d.status !== 'failed'))
+  }
+
+  function toggleSourceMenu(contentType: string) {
+    setExpandedSourceMenus((prev) => ({
+      ...prev,
+      [contentType]: !prev[contentType],
+    }))
+  }
 
   function randomBackground() {
     const next = defaultBackgrounds[Math.floor(Math.random() * defaultBackgrounds.length)]
@@ -195,7 +288,10 @@ function App() {
                 >
                   {v.compatibility === 'recommended' ? '推荐' : '兼容'}
                 </span>
-                <button className="rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-glow active:scale-95">
+                <button 
+                  onClick={() => addDownload(v.title, contentType, '12.5 MB')}
+                  className="rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-lg transition-all hover:scale-105 hover:shadow-glow active:scale-95"
+                >
                   下载
                 </button>
               </div>
@@ -226,156 +322,110 @@ function App() {
   }
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden"
-      style={{
-        backgroundImage: `linear-gradient(120deg, rgba(10,15,24,0.9), rgba(6,10,16,0.94)), url(${backgroundUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <div className={clsx('absolute inset-0', blurBackground && 'backdrop-blur-[18px]')} />
-      <div className="absolute inset-0 bg-grid bg-[length:24px_24px]" />
+    <div className="relative h-screen overflow-hidden bg-slate-900 flex flex-col">
+      {/* 自定义标题栏 */}
+      <CustomTitlebar />
 
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight text-white">CMCL</h1>
-            <p className="mt-1 text-sm text-white/60">CIME Minecraft Launcher · 现代化游戏启动器</p>
-          </div>
-          <div className="glass flex items-center gap-3 rounded-2xl px-5 py-3 shadow-lg transition-all hover:shadow-xl">
-            <div className="flex items-center gap-3">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-white/80 transition-colors hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={blurBackground}
-                  onChange={(e) => setBlurBackground(e.target.checked)}
-                  className="h-4 w-4 rounded accent-brand-500"
-                />
-                <span>毛玻璃效果</span>
-              </label>
-              <div className="h-6 w-px bg-white/10" />
-              <input
-                type="color"
-                value={themeColor}
-                onChange={(e) => setThemeColor(e.target.value)}
-                className="h-8 w-8 cursor-pointer rounded-lg border border-white/20 bg-transparent transition-transform hover:scale-110"
-                title="选择主题色"
-              />
-              <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition-all hover:border-white/20 hover:bg-white/10"
-                title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
-              >
-                {isDarkMode ? (
-                  <svg className="h-4 w-4 inline mr-1" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4 inline mr-1" fill="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="5" />
-                    <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6m-4.22 7.78l-4.24-4.24m-5.08-5.08L2.46 2.46" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" />
-                  </svg>
-                )}
-                {isDarkMode ? '夜' : '日'}
-              </button>
-              <div className="h-6 w-px bg-white/10" />
-              <button
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition-all hover:border-white/20 hover:bg-white/10"
-                onClick={randomBackground}
-              >
-                换背景
-              </button>
+      {/* 主容器 */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* 背景层 */}
+        <div
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `linear-gradient(120deg, rgba(10,15,24,0.9), rgba(6,10,16,0.94)), url(${backgroundUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          <div className={clsx('absolute inset-0', blurBackground && 'backdrop-blur-[18px]')} />
+          <div className="absolute inset-0 bg-grid bg-[length:24px_24px]" />
+        </div>
+
+        {/* 左侧菜单 */}
+        <SidebarNav
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isDarkMode={isDarkMode}
+          onThemeToggle={() => setIsDarkMode(!isDarkMode)}
+        />
+
+        {/* 右侧内容区域 */}
+        <main className="flex-1 relative z-10 overflow-y-auto">
+          <div className="mx-auto max-w-6xl px-8 py-8">
+            {/* 所有选项卡的通用外观面板 */}
+            <div className="glass rounded-2xl p-6 shadow-xl mb-6">
+              <h3 className="text-lg font-semibold text-white mb-4">外观设置</h3>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-white/80 transition-colors hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={blurBackground}
+                    onChange={(e) => setBlurBackground(e.target.checked)}
+                    className="h-4 w-4 rounded accent-brand-500"
+                  />
+                  <span>毛玻璃效果</span>
+                </label>
+                <div className="h-6 w-px bg-white/10" />
+                <label className="flex items-center gap-2 text-sm text-white/80">
+                  <span>主题色：</span>
+                  <input
+                    type="color"
+                    value={themeColor}
+                    onChange={(e) => setThemeColor(e.target.value)}
+                    className="h-8 w-8 cursor-pointer rounded-lg border border-white/20 bg-transparent transition-transform hover:scale-110"
+                    title="选择主题色"
+                  />
+                </label>
+                <div className="h-6 w-px bg-white/10" />
+                <button
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition-all hover:border-white/20 hover:bg-white/10"
+                  onClick={randomBackground}
+                >
+                  换背景
+                </button>
+              </div>
             </div>
-          </div>
-        </header>
 
-        <nav className="glass flex gap-2 rounded-2xl p-2 shadow-lg">
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={clsx(
-              'flex-1 rounded-xl px-6 py-3 text-sm font-medium transition-all',
-              activeTab === 'settings'
-                ? 'bg-brand-500/20 text-white shadow-glow'
-                : 'text-white/60 hover:bg-white/5 hover:text-white/80',
-            )}
-          >
-            启动器设置
-          </button>
-          <button
-            onClick={() => setActiveTab('content')}
-            className={clsx(
-              'flex-1 rounded-xl px-6 py-3 text-sm font-medium transition-all',
-              activeTab === 'content'
-                ? 'bg-brand-500/20 text-white shadow-glow'
-                : 'text-white/60 hover:bg-white/5 hover:text-white/80',
-            )}
-          >
-            内容下载
-          </button>
-          <button
-            onClick={() => setActiveTab('instances')}
-            className={clsx(
-              'flex-1 rounded-xl px-6 py-3 text-sm font-medium transition-all',
-              activeTab === 'instances'
-                ? 'bg-brand-500/20 text-white shadow-glow'
-                : 'text-white/60 hover:bg-white/5 hover:text-white/80',
-            )}
-          >
-            游戏实例
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={clsx(
-              'flex-1 rounded-xl px-6 py-3 text-sm font-medium transition-all',
-              activeTab === 'history'
-                ? 'bg-brand-500/20 text-white shadow-glow'
-                : 'text-white/60 hover:bg-white/5 hover:text-white/80',
-            )}
-          >
-            版本历史
-          </button>
-        </nav>
+            {/* 选项卡内容 */}
+            {activeTab === 'settings' && (
+              <div className="space-y-6">
+                {/* 配置预设 */}
+                <section className="glass rounded-2xl p-6 shadow-xl">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/20 text-brand-400">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">快速预设</h3>
+                      <p className="text-xs text-white/50">一键应用推荐配置</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    {presets.map((preset) => (
+                      <button
+                        key={preset.name}
+                        onClick={() => {
+                          if (preset.config.source === 'auto') {
+                            setAutoSource(true)
+                          } else {
+                            setAutoSource(false)
+                            setSource(preset.config.source)
+                          }
+                          setThreads(preset.config.threads)
+                          setPrimaryLoader(preset.config.loader)
+                        }}
+                        className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-all hover:border-brand-500/50 hover:bg-brand-500/10"
+                      >
+                        <p className="font-semibold text-white">{preset.name}</p>
+                        <p className="mt-1 text-xs text-white/50">线程: {preset.config.threads} · {preset.config.loader}</p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
 
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            {/* 配置预设 */}
-            <section className="glass rounded-2xl p-6 shadow-xl">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/20 text-brand-400">
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">快速预设</h3>
-                  <p className="text-xs text-white/50">一键应用推荐配置</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                {presets.map((preset) => (
-                  <button
-                    key={preset.name}
-                    onClick={() => {
-                      if (preset.config.source === 'auto') {
-                        setAutoSource(true)
-                      } else {
-                        setAutoSource(false)
-                        setSource(preset.config.source)
-                      }
-                      setThreads(preset.config.threads)
-                      setPrimaryLoader(preset.config.loader)
-                    }}
-                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-all hover:border-brand-500/50 hover:bg-brand-500/10"
-                  >
-                    <p className="font-semibold text-white">{preset.name}</p>
-                    <p className="mt-1 text-xs text-white/50">线程: {preset.config.threads} · {preset.config.loader}</p>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="glass group rounded-2xl p-6 shadow-xl transition-all hover:shadow-2xl">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/20 text-brand-400">
@@ -770,6 +820,7 @@ function App() {
               </div>
             </div>
 
+            {/* 模组 */}
             <div className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400">
@@ -785,9 +836,23 @@ function App() {
                   {getFilteredContent('mods').length} / {contentCatalog.mods.length}
                 </span>
               </div>
+
+              {/* 模组源切换菜单 */}
+              <div className="mb-4">
+                <ContentTypeSourceMenu
+                  contentType="mods"
+                  sources={downloadSources}
+                  currentSource={modsSource}
+                  onSourceChange={setModsSource}
+                  isExpanded={expandedSourceMenus.mods}
+                  onToggle={() => toggleSourceMenu('mods')}
+                />
+              </div>
+
               <ul className="space-y-2">{renderVersions('mods')}</ul>
             </div>
 
+            {/* 资源包 */}
             <div className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/20 text-blue-400">
@@ -803,9 +868,23 @@ function App() {
                   {getFilteredContent('resourcePacks').length} / {contentCatalog.resourcePacks.length}
                 </span>
               </div>
+
+              {/* 资源包源切换菜单 */}
+              <div className="mb-4">
+                <ContentTypeSourceMenu
+                  contentType="resourcePacks"
+                  sources={downloadSources}
+                  currentSource={resourcePacksSource}
+                  onSourceChange={setResourcePacksSource}
+                  isExpanded={expandedSourceMenus.resourcePacks}
+                  onToggle={() => toggleSourceMenu('resourcePacks')}
+                />
+              </div>
+
               <ul className="space-y-2">{renderVersions('resourcePacks')}</ul>
             </div>
 
+            {/* 光影 */}
             <div className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
@@ -821,9 +900,23 @@ function App() {
                   {getFilteredContent('shaders').length} / {contentCatalog.shaders.length}
                 </span>
               </div>
+
+              {/* 光影源切换菜单 */}
+              <div className="mb-4">
+                <ContentTypeSourceMenu
+                  contentType="shaders"
+                  sources={downloadSources}
+                  currentSource={shadersSource}
+                  onSourceChange={setShadersSource}
+                  isExpanded={expandedSourceMenus.shaders}
+                  onToggle={() => toggleSourceMenu('shaders')}
+                />
+              </div>
+
               <ul className="space-y-2">{renderVersions('shaders')}</ul>
             </div>
 
+            {/* 世界 */}
             <div className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20 text-green-400">
@@ -839,11 +932,34 @@ function App() {
                   {getFilteredContent('worlds').length} / {contentCatalog.worlds.length}
                 </span>
               </div>
+
+              {/* 世界源切换菜单 */}
+              <div className="mb-4">
+                <ContentTypeSourceMenu
+                  contentType="worlds"
+                  sources={downloadSources}
+                  currentSource={worldsSource}
+                  onSourceChange={setWorldsSource}
+                  isExpanded={expandedSourceMenus.worlds}
+                  onToggle={() => toggleSourceMenu('worlds')}
+                />
+              </div>
+
               <ul className="space-y-2">{renderVersions('worlds')}</ul>
             </div>
           </div>
         )}
-      </main>
+          </div>
+        </main>
+
+        {/* 下载管理器 */}
+        <DownloadManager
+          downloads={downloads}
+          onRemove={removeDownload}
+          onRetry={retryDownload}
+          onClear={clearDownloads}
+        />
+      </div>
 
       <div className="pointer-events-none absolute inset-0" aria-hidden>
         <div
