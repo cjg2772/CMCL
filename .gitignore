@@ -14,6 +14,7 @@ dist-electron
 release
 win-unpacked
 *.local
+cmcl-green-zip.zip
 
 # Editor directories and files
 .vscode/*

@@ -16,6 +16,8 @@ function createWindow() {
     backgroundColor: '#0b0f15',
     vibrancy: 'appearance-based',
     visualEffectState: 'active',
+    autoHideMenuBar: true,
+    frame: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

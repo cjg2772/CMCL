@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { clsx } from 'clsx'
 import { contentCatalog, defaultBackgrounds } from './data'
 import {
-  type ContentVersion,
   type DownloadSource,
   type LoaderAddon,
   type LoaderPrimary,
@@ -149,9 +148,10 @@ function App() {
     )
   }
 
-  function renderVersions(versions: ContentVersion[]) {
-    const compatible = versions.filter((v) => v.compatibility !== 'incompatible')
-    const incompatible = versions.filter((v) => v.compatibility === 'incompatible')
+  function renderVersions(contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds') {
+    const allVersions = contentCatalog[contentType].flatMap(item => item.versions)
+    const compatible = allVersions.filter((v) => v.compatibility !== 'incompatible')
+    const incompatible = allVersions.filter((v) => v.compatibility === 'incompatible')
 
     return (
       <div className="space-y-2">
