@@ -207,22 +207,84 @@ function App() {
     setThreads(clamped)
   }
 
+  // 获取加载器推荐配置
+  function getLoaderRecommendation(loader: LoaderPrimary): string {
+    const recommendations: Record<LoaderPrimary, string> = {
+      fabric: 'Fabric API 是必需的，大多数 Fabric Mod 都需要它作为前置',
+      quilt: 'QSL (Quilt Standard Libraries) 提供最佳兼容性，QFAPI 用于兼容 Fabric Mod',
+      forge: 'Forge 是最成熟的 Mod 加载器，拥有最多的 Mod 生态',
+      neoforge: 'NeoForge 是 Forge 的现代化分支，支持最新版本',
+      optifine: 'OptiFine 专注于性能优化，不支持大多数 Mod',
+      vanilla: '原版游戏，无 Mod 支持，性能最优',
+    }
+    return recommendations[loader]
+  }
+
+  // 验证加载器组合是否有效
+  function validateLoaderCombination(primary: LoaderPrimary, addons: LoaderAddon[]): boolean {
+    // 原版、Forge、NeoForge、OptiFine 不支持任何附加组件
+    if (['vanilla', 'forge', 'neoforge', 'optifine'].includes(primary)) {
+      return addons.length === 0
+    }
+
+    // Fabric 只支持 Fabric API
+    if (primary === 'fabric') {
+      return addons.every(addon => addon === 'fabric-api')
+    }
+
+    // Quilt 只支持 Quilt 相关附加组件
+    if (primary === 'quilt') {
+      return addons.every(addon => ['quilt-api', 'qsl', 'qfapi'].includes(addon))
+    }
+
+    return true
+  }
+
   function applyLoader(primary: LoaderPrimary, addons: LoaderAddon[]) {
-    let nextAddons = addons
+    let nextAddons: LoaderAddon[] = []
     let note = ''
 
-    if (primary === 'fabric') {
-      nextAddons = addons.filter((a) => a === 'fabric-api')
-      note = 'Fabric 需搭配 Fabric API，OptiFine 将被禁用'
-    } else if (primary === 'quilt') {
-      nextAddons = addons.filter((a) => a === 'quilt-api' || a === 'qsl' || a === 'qfapi')
-      note = 'Quilt 推荐 QSL/QFAPI 组合'
-    } else if (primary === 'optifine') {
+    switch (primary) {
+      case 'fabric':
+        // Fabric 自动添加 Fabric API（如果当前没有）
+        nextAddons = addons.includes('fabric-api') ? ['fabric-api'] : ['fabric-api']
+        note = getLoaderRecommendation('fabric')
+        break
+
+      case 'quilt':
+        // Quilt 保留有效的附加组件，如果没有则推荐 QSL
+        nextAddons = addons.filter((a) => ['quilt-api', 'qsl', 'qfapi'].includes(a))
+        if (nextAddons.length === 0) {
+          nextAddons = ['qsl'] // 默认推荐 QSL
+        }
+        note = getLoaderRecommendation('quilt')
+        break
+
+      case 'optifine':
+        nextAddons = []
+        note = getLoaderRecommendation('optifine') + '（与 Fabric/Quilt 互斥）'
+        break
+
+      case 'forge':
+        nextAddons = []
+        note = getLoaderRecommendation('forge')
+        break
+
+      case 'neoforge':
+        nextAddons = []
+        note = getLoaderRecommendation('neoforge')
+        break
+
+      case 'vanilla':
+        nextAddons = []
+        note = getLoaderRecommendation('vanilla')
+        break
+    }
+
+    // 验证组合
+    if (!validateLoaderCombination(primary, nextAddons)) {
+      console.warn('Invalid loader combination:', primary, nextAddons)
       nextAddons = []
-      note = 'OptiFine 与 Fabric/Quilt 不兼容'
-    } else {
-      nextAddons = []
-      note = `${primary === 'vanilla' ? '原版' : primary} 将禁用其他 Loader`
     }
 
     setPrimaryLoader(primary)
@@ -231,16 +293,41 @@ function App() {
   }
 
   function toggleAddon(addon: LoaderAddon) {
-    if (primaryLoader === 'optifine' || primaryLoader === 'forge' || primaryLoader === 'neoforge' || primaryLoader === 'vanilla') {
+    // 不支持附加组件的加载器直接返回
+    if (['optifine', 'forge', 'neoforge', 'vanilla'].includes(primaryLoader)) {
+      console.warn(`${primaryLoader} 不支持附加组件`)
       return
     }
 
-    if (primaryLoader === 'fabric' && addon !== 'fabric-api') return
-    if (primaryLoader === 'quilt' && addon === 'fabric-api') return
+    // Fabric 只能使用 Fabric API
+    if (primaryLoader === 'fabric' && addon !== 'fabric-api') {
+      console.warn('Fabric 只支持 Fabric API')
+      return
+    }
 
-    setLoaderAddons((prev) =>
-      prev.includes(addon) ? prev.filter((a) => a !== addon) : [...prev, addon],
-    )
+    // Quilt 不能使用 Fabric API
+    if (primaryLoader === 'quilt' && addon === 'fabric-api') {
+      console.warn('Quilt 不支持 Fabric API，请使用 QFAPI 来兼容 Fabric Mod')
+      return
+    }
+
+    setLoaderAddons((prev) => {
+      const isCurrentlyEnabled = prev.includes(addon)
+      
+      if (isCurrentlyEnabled) {
+        // 移除附加组件
+        const newAddons = prev.filter((a) => a !== addon)
+        // Fabric API 是必需的，不允许完全移除
+        if (primaryLoader === 'fabric' && newAddons.length === 0) {
+          console.warn('Fabric API 是必需的')
+          return prev
+        }
+        return newAddons
+      } else {
+        // 添加附加组件
+        return [...prev, addon]
+      }
+    })
   }
 
   function getFilteredContent(contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds') {
@@ -640,25 +727,43 @@ function App() {
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <h4 className="mb-2 text-sm font-semibold text-white">兼容性规则</h4>
-                  <ul className="space-y-1.5 text-xs leading-relaxed text-white/60">
-                    <li className="flex gap-2">
-                      <span className="text-brand-400">•</span>
-                      <span>OptiFine 与 Fabric / Quilt 互斥，切换时自动清理附加组件</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-brand-400">•</span>
-                      <span>Fabric 仅可搭配 Fabric API</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-brand-400">•</span>
-                      <span>Quilt 仅可搭配 QSL / QFAPI / Quilt API</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-brand-400">•</span>
-                      <span>Forge / NeoForge / 原版禁用所有附加组件</span>
-                    </li>
-                  </ul>
+                  <h4 className="mb-3 text-sm font-semibold text-white">加载器说明</h4>
+                  <div className="space-y-2 text-xs leading-relaxed text-white/60">
+                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2">
+                      <p className="font-medium text-blue-300">Fabric</p>
+                      <p className="mt-1">轻量级、模块化，启动快，适合大多数场景</p>
+                    </div>
+                    <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-2">
+                      <p className="font-medium text-purple-300">Quilt</p>
+                      <p className="mt-1">Fabric 分支，向后兼容，提供更多功能</p>
+                    </div>
+                    <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-2">
+                      <p className="font-medium text-orange-300">Forge / NeoForge</p>
+                      <p className="mt-1">传统加载器，Mod 生态最丰富</p>
+                    </div>
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-2">
+                      <p className="font-medium text-green-300">OptiFine</p>
+                      <p className="mt-1">性能优化专用，不支持大多数 Mod</p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-white/10">
+                    <h5 className="text-xs font-semibold text-white/70 mb-2">兼容性提示</h5>
+                    <ul className="space-y-1 text-xs text-white/50">
+                      <li className="flex gap-2">
+                        <span className="text-brand-400">•</span>
+                        <span>OptiFine 与 Fabric/Quilt 互斥</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-brand-400">•</span>
+                        <span>Forge Mod 不能用于 Fabric</span>
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="text-brand-400">•</span>
+                        <span>Quilt 可运行大部分 Fabric Mod</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </section>
@@ -667,6 +772,33 @@ function App() {
 
         {activeTab === 'instances' && (
           <div className="space-y-6">
+            {/* 游戏版本下载 */}
+            <section className="glass rounded-2xl p-6 shadow-xl">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/20 text-green-400">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">下载游戏版本</h3>
+                  <p className="text-xs text-white/50">Minecraft Java Edition</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {['1.21.4', '1.21.3', '1.20.6', '1.20.4', '1.20.1', '1.19.4', '1.18.2', '1.16.5', '1.12.2', '1.8.9', '1.7.10'].map((version) => (
+                  <button
+                    key={version}
+                    onClick={() => addDownload(`Minecraft ${version}`, 'mods', '150 MB')}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition-all hover:border-brand-500/50 hover:bg-brand-500/10 hover:shadow-glow"
+                  >
+                    {version}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <section className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
