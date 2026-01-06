@@ -55,6 +55,8 @@ function App() {
   const [backgroundUrl, setBackgroundUrl] = useState(defaultBackgrounds[0])
   const [blurBackground, setBlurBackground] = useState(true)
   const [themeColor, setThemeColor] = useState('#3b82f6')
+  const [isDarkMode, setIsDarkMode] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const [autoSource, setAutoSource] = useState(true)
   const [source, setSource] = useState<DownloadSource>('bmclapi')
@@ -148,8 +150,20 @@ function App() {
     )
   }
 
+  function getFilteredContent(contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds') {
+    const items = contentCatalog[contentType]
+    if (!searchQuery.trim()) return items
+    
+    const query = searchQuery.toLowerCase()
+    return items.filter(item => 
+      item.title.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query)
+    )
+  }
+
   function renderVersions(contentType: 'mods' | 'resourcePacks' | 'shaders' | 'worlds') {
-    const allVersions = contentCatalog[contentType].flatMap(item => item.versions)
+    const filtered = getFilteredContent(contentType)
+    const allVersions = filtered.flatMap(item => item.versions)
     const compatible = allVersions.filter((v) => v.compatibility !== 'incompatible')
     const incompatible = allVersions.filter((v) => v.compatibility === 'incompatible')
 
@@ -248,6 +262,24 @@ function App() {
                 className="h-8 w-8 cursor-pointer rounded-lg border border-white/20 bg-transparent transition-transform hover:scale-110"
                 title="选择主题色"
               />
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition-all hover:border-white/20 hover:bg-white/10"
+                title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
+              >
+                {isDarkMode ? (
+                  <svg className="h-4 w-4 inline mr-1" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4 inline mr-1" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m5.08 5.08l4.24 4.24M1 12h6m6 0h6m-4.22 7.78l-4.24-4.24m-5.08-5.08L2.46 2.46" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" />
+                  </svg>
+                )}
+                {isDarkMode ? '夜' : '日'}
+              </button>
+              <div className="h-6 w-px bg-white/10" />
               <button
                 className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/80 transition-all hover:border-white/20 hover:bg-white/10"
                 onClick={randomBackground}
@@ -722,6 +754,22 @@ function App() {
 
         {activeTab === 'content' && (
           <div className="space-y-5">
+            {/* 搜索框 */}
+            <div className="glass rounded-2xl p-4 shadow-xl">
+              <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3 border border-white/10 focus-within:border-brand-500/50">
+                <svg className="h-5 w-5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="搜索模组、资源包、光影和世界..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent text-white placeholder-white/40 focus:outline-none"
+                />
+              </div>
+            </div>
+
             <div className="glass rounded-2xl p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20 text-purple-400">
@@ -734,7 +782,7 @@ function App() {
                   <p className="text-xs text-white/50">来源：Modrinth + CurseForge</p>
                 </div>
                 <span className="ml-auto rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs text-brand-300">
-                  {contentCatalog.mods.length} 个可用
+                  {getFilteredContent('mods').length} / {contentCatalog.mods.length}
                 </span>
               </div>
               <ul className="space-y-2">{renderVersions('mods')}</ul>
@@ -752,7 +800,7 @@ function App() {
                   <p className="text-xs text-white/50">来源：Modrinth + CurseForge</p>
                 </div>
                 <span className="ml-auto rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs text-brand-300">
-                  {contentCatalog.resourcePacks.length} 个可用
+                  {getFilteredContent('resourcePacks').length} / {contentCatalog.resourcePacks.length}
                 </span>
               </div>
               <ul className="space-y-2">{renderVersions('resourcePacks')}</ul>
@@ -770,7 +818,7 @@ function App() {
                   <p className="text-xs text-white/50">来源：Modrinth + CurseForge</p>
                 </div>
                 <span className="ml-auto rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs text-brand-300">
-                  {contentCatalog.shaders.length} 个可用
+                  {getFilteredContent('shaders').length} / {contentCatalog.shaders.length}
                 </span>
               </div>
               <ul className="space-y-2">{renderVersions('shaders')}</ul>
@@ -788,7 +836,7 @@ function App() {
                   <p className="text-xs text-white/50">来源：Modrinth + CurseForge</p>
                 </div>
                 <span className="ml-auto rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs text-brand-300">
-                  {contentCatalog.worlds.length} 个可用
+                  {getFilteredContent('worlds').length} / {contentCatalog.worlds.length}
                 </span>
               </div>
               <ul className="space-y-2">{renderVersions('worlds')}</ul>

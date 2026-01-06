@@ -8,22 +8,27 @@ const isDev = !app.isPackaged
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 1100,
-    minHeight: 720,
+    width: 1400,
+    height: 900,
+    minWidth: 1400,
+    minHeight: 900,
+    maxWidth: 1400,
+    maxHeight: 900,
     title: 'CIME Minecraft Launcher',
-    backgroundColor: '#0b0f15',
+    backgroundColor: '#0a0e27',
     vibrancy: 'appearance-based',
     visualEffectState: 'active',
     autoHideMenuBar: true,
-    frame: true,
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   })
+  
+  // 隐藏菜单栏
+  win.setMenu(null)
 
   const rendererUrl = isDev
     ? 'http://localhost:5173'
