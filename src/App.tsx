@@ -342,15 +342,17 @@ function App() {
         </div>
 
         {/* 左侧菜单 */}
-        <SidebarNav
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          isDarkMode={isDarkMode}
-          onThemeToggle={() => setIsDarkMode(!isDarkMode)}
-        />
+        <div className="relative z-20">
+          <SidebarNav
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            isDarkMode={isDarkMode}
+            onThemeToggle={() => setIsDarkMode(!isDarkMode)}
+          />
+        </div>
 
         {/* 右侧内容区域 */}
-        <main className="flex-1 relative z-10 overflow-y-auto overflow-x-hidden">
+        <main className="flex-1 relative z-10 overflow-y-auto">
           <div className="mx-auto max-w-6xl px-8 py-8">
             {/* 所有选项卡的通用外观面板 */}
             <div className="glass rounded-2xl p-6 shadow-xl mb-6">

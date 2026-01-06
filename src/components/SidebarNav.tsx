@@ -51,7 +51,7 @@ export function SidebarNav({ activeTab, onTabChange, isDarkMode, onThemeToggle }
   ]
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-white/10 flex flex-col h-screen">
+    <aside className="w-64 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-white/10 flex flex-col h-full">
       {/* 菜单项 */}
       <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
         {menuItems.map((item) => (
